@@ -13,6 +13,9 @@ import SummaryHistory from './pages/SummaryHistory';
 import SummaryDetail from './pages/SummaryDetail';
 import Documents from './pages/Documents';
 import DocumentChat from './pages/DocumentChat';
+import Workspaces from './pages/Workspaces';
+import WorkspaceDetail from './pages/WorkspaceDetail';
+import WorkspaceChat from './pages/WorkspaceChat';
 
 export default function App() {
     return (
@@ -37,6 +40,9 @@ export default function App() {
                         <Route path="/summarizer" element={<Summarizer />} />
                         <Route path="/summaries" element={<SummaryHistory />} />
                         <Route path="/summaries/:id" element={<SummaryDetail />} />
+                        <Route path="/workspaces" element={<Workspaces />} />
+                        <Route path="/workspaces/:id" element={<WorkspaceDetail />} />
+                        <Route path="/workspaces/:id/chat" element={<WorkspaceChat />} />
                         <Route path="/documents" element={<Documents />} />
                         <Route path="/documents/:id" element={<DocumentChat />} />
                         <Route

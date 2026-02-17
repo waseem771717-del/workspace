@@ -35,7 +35,10 @@ const ALLOWED_TYPES = [
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'image/jpeg',
     'image/png',
-    'image/webp'
+    'image/webp',
+    'text/csv',
+    'text/markdown',
+    'text/x-markdown'
 ];
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -46,7 +49,7 @@ const upload = multer({
         if (ALLOWED_TYPES.includes(file.mimetype)) {
             cb(null, true);
         } else {
-            cb(new Error('Allowed formats: PDF, TXT, DOCX, JPG, PNG, WEBP'));
+            cb(new Error('Allowed formats: PDF, TXT, DOCX, JPG, PNG, WEBP, CSV, MD'));
         }
     },
 });
@@ -55,9 +58,10 @@ const upload = multer({
 
 /** Extract text from a PDF buffer */
 async function extractPdfText(filePath: string): Promise<string> {
-    const pdfParse = (await import('pdf-parse')).default;
+    const pdfParse = await import('pdf-parse');
     const buffer = fs.readFileSync(filePath);
-    const data = await pdfParse(buffer);
+    const parseFunc = pdfParse.default || pdfParse;
+    const data = await parseFunc(buffer);
     return data.text;
 }
 
@@ -101,6 +105,19 @@ async function extractImageText(filePath: string, fileType: string): Promise<str
     ]);
 
     return result.response.text();
+}
+
+/** Extract text from a CSV file */
+function extractCsvText(filePath: string): string {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    // Simple CSV to text conversion
+    const rows = content.split('\n').map(row => row.trim()).filter(row => row.length > 0);
+    return rows.join('\n');
+}
+
+/** Extract text from a Markdown file */
+function extractMarkdownText(filePath: string): string {
+    return fs.readFileSync(filePath, 'utf-8');
 }
 
 /** Split text into overlapping chunks */
@@ -234,23 +251,58 @@ router.post('/upload', (req: Request, res: Response) => {
         }
 
         try {
+            const { workspace_id } = req.body;
+
+            // Validate workspace_id
+            if (!workspace_id || typeof workspace_id !== 'string') {
+                res.status(400).json({ error: 'workspace_id is required' });
+                return;
+            }
+
+            // Verify workspace exists and user has access
+            const isAdmin = req.user!.role === 'admin';
+            let workspaceQuery: string;
+            let workspaceParams: unknown[];
+
+            if (isAdmin) {
+                workspaceQuery = 'SELECT * FROM workspaces WHERE id = $1';
+                workspaceParams = [workspace_id];
+            } else {
+                workspaceQuery = 'SELECT * FROM workspaces WHERE id = $1 AND user_id = $2';
+                workspaceParams = [workspace_id, req.user!.id];
+            }
+
+            const workspaceResult = await pool.query(workspaceQuery, workspaceParams);
+            if (workspaceResult.rows.length === 0) {
+                res.status(404).json({ error: 'Workspace not found' });
+                return;
+            }
+
             const file = req.file;
             let fileType = 'txt';
             if (file.mimetype === 'application/pdf') fileType = 'pdf';
             else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') fileType = 'docx';
             else if (file.mimetype.startsWith('image/')) fileType = file.mimetype.split('/')[1];
+            else if (file.mimetype === 'text/csv') fileType = 'csv';
+            else if (file.mimetype === 'text/markdown' || file.mimetype === 'text/x-markdown') fileType = 'md';
 
             // Insert document record
             const docResult = await pool.query(
-                `INSERT INTO documents (user_id, filename, file_path, file_type, file_size, status)
-                 VALUES ($1, $2, $3, $4, $5, 'processing')
+                `INSERT INTO documents (user_id, workspace_id, filename, file_path, file_type, file_size, status)
+                 VALUES ($1, $2, $3, $4, $5, $6, 'processing')
                  RETURNING id, filename, file_type, file_size, status, created_at`,
-                [req.user!.id, file.originalname, file.path, fileType, file.size]
+                [req.user!.id, workspace_id, file.originalname, file.path, fileType, file.size]
             );
             const doc = docResult.rows[0];
 
+            // Update workspace last_activity
+            await pool.query(
+                'UPDATE workspaces SET last_activity = NOW() WHERE id = $1',
+                [workspace_id]
+            );
+
             // Process document asynchronously (non-blocking response)
-            processDocument(doc.id, file.path, fileType).catch((e) => {
+            processDocument(doc.id, file.path, fileType, file.originalname).catch((e) => {
                 console.error(`Error processing document ${doc.id}:`, e);
             });
 
@@ -263,7 +315,7 @@ router.post('/upload', (req: Request, res: Response) => {
 });
 
 /** Process a document: extract text, chunk it, store chunks */
-async function processDocument(docId: string, filePath: string, fileType: string) {
+async function processDocument(docId: string, filePath: string, fileType: string, filename: string) {
     try {
         // Extract text
         if (!fs.existsSync(filePath)) {
@@ -277,6 +329,10 @@ async function processDocument(docId: string, filePath: string, fileType: string
             text = await extractDocxText(filePath);
         } else if (['jpg', 'jpeg', 'png', 'webp'].includes(fileType)) {
             text = await extractImageText(filePath, fileType);
+        } else if (fileType === 'csv') {
+            text = extractCsvText(filePath);
+        } else if (fileType === 'md') {
+            text = extractMarkdownText(filePath);
         } else {
             text = extractTxtText(filePath);
         }
@@ -289,12 +345,12 @@ async function processDocument(docId: string, filePath: string, fileType: string
         // Chunk the text
         const chunks = chunkText(text);
 
-        // Insert chunks
+        // Insert chunks with document filename for source attribution
         for (let i = 0; i < chunks.length; i++) {
             await pool.query(
-                `INSERT INTO document_chunks (document_id, chunk_index, content)
-                 VALUES ($1, $2, $3)`,
-                [docId, i, chunks[i]]
+                `INSERT INTO document_chunks (document_id, document_filename, chunk_index, content)
+                 VALUES ($1, $2, $3, $4)`,
+                [docId, filename, i, chunks[i]]
             );
         }
 

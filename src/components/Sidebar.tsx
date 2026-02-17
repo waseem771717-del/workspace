@@ -6,7 +6,7 @@ const adminLinks = [
     { to: '/dashboard', label: 'Dashboard', icon: HomeIcon },
     { to: '/users', label: 'User Management', icon: UsersIcon },
     { to: '/summarizer', label: 'AI Summarizer', icon: AiIcon },
-    { to: '/documents', label: 'Doc Q&A', icon: DocIcon },
+    { to: '/workspaces', label: 'Workspaces', icon: DocIcon },
     { to: '/summaries', label: 'My Summaries', icon: HistoryIcon },
     { to: '/all-summaries', label: 'All Summaries', icon: HistoryIcon },
     { to: '/profile', label: 'Profile', icon: ProfileIcon },
@@ -15,7 +15,7 @@ const adminLinks = [
 const userLinks = [
     { to: '/dashboard', label: 'Dashboard', icon: HomeIcon },
     { to: '/summarizer', label: 'AI Summarizer', icon: AiIcon },
-    { to: '/documents', label: 'Doc Q&A', icon: DocIcon },
+    { to: '/workspaces', label: 'Workspaces', icon: DocIcon },
     { to: '/summaries', label: 'My Summaries', icon: HistoryIcon },
     { to: '/profile', label: 'Profile', icon: ProfileIcon },
 ];

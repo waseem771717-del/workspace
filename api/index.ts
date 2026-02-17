@@ -5,6 +5,8 @@ import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import aiRoutes from './routes/ai.js';
 import documentRoutes from './routes/documents.js';
+import workspaceRoutes from './routes/workspaces.js';
+import adminWebSearchRoutes from './routes/admin/webSearch.js';
 
 dotenv.config();
 
@@ -17,7 +19,9 @@ app.use(express.json({ limit: '5mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/admin/web-search', adminWebSearchRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
