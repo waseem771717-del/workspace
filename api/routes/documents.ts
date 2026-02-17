@@ -56,12 +56,13 @@ const upload = multer({
 
 // ── Helpers ──────────────────────────────────────────────
 
-/** Extract text from a PDF buffer */
+// Helper function to extract text from PDF
 async function extractPdfText(filePath: string): Promise<string> {
+    const dataBuffer = fs.readFileSync(filePath);
+    // @ts-ignore - pdf-parse has ESM/CommonJS export issues
     const pdfParse = await import('pdf-parse');
-    const buffer = fs.readFileSync(filePath);
     const parseFunc = pdfParse.default || pdfParse;
-    const data = await parseFunc(buffer);
+    const data = await (parseFunc as any)(dataBuffer);
     return data.text;
 }
 
