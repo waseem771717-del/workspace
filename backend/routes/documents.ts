@@ -56,14 +56,33 @@ const upload = multer({
 
 // ── Helpers ──────────────────────────────────────────────
 
-// Helper function to extract text from PDF
+// Helper function to extract text from PDF using Gemini
 async function extractPdfText(filePath: string): Promise<string> {
-    const dataBuffer = fs.readFileSync(filePath);
-    // @ts-ignore - pdf-parse has ESM/CommonJS export issues
-    const pdfParse = await import('pdf-parse');
-    const parseFunc = pdfParse.default || pdfParse;
-    const data = await (parseFunc as any)(dataBuffer);
-    return data.text;
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        throw new Error('GEMINI_API_KEY is not configured for PDF processing');
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    const fileBuffer = fs.readFileSync(filePath);
+
+    const prompt = "Extract all text from this PDF document. Maintain the structural integrity and return ONLY the text content, no conversational filler.";
+
+    const result = await model.generateContent([
+        prompt,
+        {
+            inlineData: {
+                data: fileBuffer.toString('base64'),
+                mimeType: 'application/pdf'
+            }
+        }
+    ]);
+
+    return result.response.text();
 }
 
 /** Extract text from a TXT file */
